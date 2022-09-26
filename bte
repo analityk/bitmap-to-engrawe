@@ -1,0 +1,134 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Drawing;
+using System.IO;
+using System.Globalization;
+
+namespace ConsoleApp1
+{
+	class Program
+	{
+		
+		// absolutny system pozycjonowania
+		// zawsze zaczynam palenie w punkcie xy 0,0;
+
+		static void Main(string[] args)
+		{
+			Bitmap srcb = new Bitmap(@"C:\nc\graph\miki.png");
+
+			StreamWriter new_nc_file = new StreamWriter(@"C:\nc\graph\miki.nc");
+
+			new_nc_file.WriteLine("G92 X0 Y0 Z0");
+			new_nc_file.WriteLine("G21");
+			new_nc_file.WriteLine("G90");
+			new_nc_file.WriteLine("G01 F400");
+			new_nc_file.WriteLine("S20");
+
+			double dx_per_pix = 0.2; // mm per pixel
+			double dy_per_pix = 0.2; // mm per pixel
+
+			int power_min = 0;
+			int power_max = 180;
+
+			int bmp_x_cnt = srcb.Width;
+			int bmp_y_cnt = srcb.Height;
+
+			double position_x = 0.0;
+			double position_y = 0.0;
+
+			double max_x_mm = bmp_x_cnt * dx_per_pix;
+			double max_y_mm = bmp_y_cnt * dy_per_pix;
+
+
+			// dla kazdego x od zera do szereokosci obrazka
+			// nastepnie zwieksz y
+			// i lec z x od max do 0,
+			// wtedy zwieksz y
+			// zakończ kiedy y chce byc większy niz rozmiar obrazka
+
+
+			int pix_y = 0;
+			bool koniec = true;
+
+			while (koniec)
+			{
+				// zwiekszamy x od zero do max width
+				
+				for (int x = 0; x < bmp_x_cnt; x++)
+				{
+					// zalacz lub wylacz laser
+					Color c = srcb.GetPixel(x, pix_y);
+					if (c.R == 0 && c.G == 0 && c.B == 0)
+					{
+						new_nc_file.WriteLine("M03");
+					}
+					else
+					{
+						new_nc_file.WriteLine("M05");
+					}
+
+					position_x += dx_per_pix;
+					new_nc_file.WriteLine("G01 X " + position_x.ToString("0.0000", CultureInfo.InvariantCulture));
+				}
+
+				pix_y += 1;
+				position_y += dy_per_pix;
+				new_nc_file.WriteLine("M05");
+				new_nc_file.WriteLine("G01 Y " + position_y.ToString("0.0000", CultureInfo.InvariantCulture));
+
+				if (pix_y >= bmp_y_cnt)
+				{
+					koniec = false;
+					break;
+				}
+
+				for (int x = bmp_x_cnt - 1; x >= 0; x--)
+				{
+					// zalacz lub wylacz laser
+					Color c = srcb.GetPixel(x, pix_y);
+					if (c.R == 0 && c.G == 0 && c.B == 0)
+					{
+						new_nc_file.WriteLine("M03");
+					}
+					else
+					{
+						new_nc_file.WriteLine("M05");
+					}
+
+					position_x -= dx_per_pix;
+					new_nc_file.WriteLine("G01 X " + position_x.ToString("0.0000", CultureInfo.InvariantCulture));
+				}
+
+				pix_y += 1;
+				position_y += dy_per_pix;
+				new_nc_file.WriteLine("M05");
+				new_nc_file.WriteLine("G01 Y " + position_y.ToString("0.0000", CultureInfo.InvariantCulture));
+
+				if (pix_y >= bmp_y_cnt)
+				{
+					koniec = false;
+					break;
+				}
+			}
+
+			new_nc_file.WriteLine("S0");
+			new_nc_file.WriteLine("M05");
+			new_nc_file.WriteLine("G01 X0 Y0 F400");
+			
+			Console.WriteLine("koniec bitmapy");
+
+			Console.WriteLine("max X= " + max_x_mm.ToString(CultureInfo.InvariantCulture));
+			Console.WriteLine("max Y= " + max_y_mm.ToString(CultureInfo.InvariantCulture));
+
+			Console.ReadKey();
+
+			new_nc_file.Close();
+			
+
+
+		}
+	}
+}

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Drawing;
 using System.IO;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace ConsoleApp1
 {
@@ -14,21 +15,28 @@ namespace ConsoleApp1
 		
 		// absolutny system pozycjonowania
 		// zawsze zaczynam palenie w punkcie xy 0,0;
+		// regulowany czas wpalania
+		// przebieg bez palenia z vmax
 
 		static void Main(string[] args)
 		{
-			Bitmap srcb = new Bitmap(@"C:\nc\graph\miki.png");
+			Bitmap srcb = new Bitmap(@"C:\nc\graph\testy.png");
 
-			StreamWriter new_nc_file = new StreamWriter(@"C:\nc\graph\miki.nc");
+			StreamWriter new_nc_file = new StreamWriter(@"C:\nc\graph\testy.nc");
 
+			bool firing_time_active = false;
+			double firing_time_s = 0.1;
+
+			double vmax = 1000.0;
+			double vfire = 500.0;
+			
 			new_nc_file.WriteLine("G92 X0 Y0 Z0");
 			new_nc_file.WriteLine("G21");
 			new_nc_file.WriteLine("G90");
-			new_nc_file.WriteLine("G01 F400");
-			new_nc_file.WriteLine("S20");
+			new_nc_file.WriteLine("S200");
 
-			double dx_per_pix = 0.2; // mm per pixel
-			double dy_per_pix = 0.2; // mm per pixel
+			double dx_per_pix = 0.25; // mm per pixel
+			double dy_per_pix = 0.25; // mm per pixel
 
 			int power_min = 0;
 			int power_max = 180;
@@ -42,32 +50,32 @@ namespace ConsoleApp1
 			double max_x_mm = bmp_x_cnt * dx_per_pix;
 			double max_y_mm = bmp_y_cnt * dy_per_pix;
 
-
-			// dla kazdego x od zera do szereokosci obrazka
-			// nastepnie zwieksz y
-			// i lec z x od max do 0,
-			// wtedy zwieksz y
-			// zakończ kiedy y chce byc większy niz rozmiar obrazka
-
-
 			int pix_y = 0;
 			bool koniec = true;
 
 			while (koniec)
 			{
 				// zwiekszamy x od zero do max width
-				
+
 				for (int x = 0; x < bmp_x_cnt; x++)
 				{
 					// zalacz lub wylacz laser
 					Color c = srcb.GetPixel(x, pix_y);
-					if (c.R == 0 && c.G == 0 && c.B == 0)
+
+					if (c.R == 0 && c.G == 0 && c.B == 0 && c.A == 255)
 					{
 						new_nc_file.WriteLine("M03");
+						new_nc_file.WriteLine("G01 F " + vfire.ToString("0.0000", CultureInfo.InvariantCulture));
+						if (firing_time_active == true)
+						{
+							new_nc_file.WriteLine("G04 P " + firing_time_s.ToString("0.000", CultureInfo.InvariantCulture));
+						}
+
 					}
 					else
 					{
 						new_nc_file.WriteLine("M05");
+						new_nc_file.WriteLine("G01 F " + vmax.ToString("0.0000", CultureInfo.InvariantCulture));
 					}
 
 					position_x += dx_per_pix;
@@ -89,13 +97,19 @@ namespace ConsoleApp1
 				{
 					// zalacz lub wylacz laser
 					Color c = srcb.GetPixel(x, pix_y);
-					if (c.R == 0 && c.G == 0 && c.B == 0)
+					if (c.R == 0 && c.G == 0 && c.B == 0 && c.A == 255)
 					{
 						new_nc_file.WriteLine("M03");
+						new_nc_file.WriteLine("G01 F " + vfire.ToString("0.0000", CultureInfo.InvariantCulture));
+						if (firing_time_active == true)
+						{
+							new_nc_file.WriteLine("G04 P " + firing_time_s.ToString("0.000", CultureInfo.InvariantCulture));
+						}
 					}
 					else
 					{
 						new_nc_file.WriteLine("M05");
+						new_nc_file.WriteLine("G01 F " + vmax.ToString("0.0000", CultureInfo.InvariantCulture));
 					}
 
 					position_x -= dx_per_pix;
@@ -116,7 +130,7 @@ namespace ConsoleApp1
 
 			new_nc_file.WriteLine("S0");
 			new_nc_file.WriteLine("M05");
-			new_nc_file.WriteLine("G01 X0 Y0 F400");
+			new_nc_file.WriteLine("G01 X0 Y0 F " + vmax.ToString("0.0000", CultureInfo.InvariantCulture));
 			
 			Console.WriteLine("koniec bitmapy");
 
@@ -126,9 +140,50 @@ namespace ConsoleApp1
 			Console.ReadKey();
 
 			new_nc_file.Close();
+
+			StreamReader sr = new StreamReader(@"C:\nc\graph\testy.nc");
+
+			StreamWriter sw = new StreamWriter(@"C:\nc\graph\testy_short.nc");
+
+			sw.WriteLine("G92 X0 Y0 Z0");
+			sw.WriteLine("G21");
+			sw.WriteLine("G90");
+			sw.WriteLine("S200");
+
+			var lines = sr.ReadToEnd().Split('\n');
+			int lines_cnt = lines.Length;
+
+			for (int i = 0; i < lines_cnt; i++)
+			{
+				if (lines[i].Contains("M05"))
+				{
+					if ((i + 3) < lines_cnt)
+					{
+						string s = lines[i + 2];
+						string ss = Regex.Replace(s, @"\t|\n|\r", "");
+
+						sw.WriteLine("M05");
+						sw.WriteLine(ss + " F " + vmax.ToString("0.0000", CultureInfo.InvariantCulture));
+					}
+				}
+
+				if (lines[i].Contains("M03"))
+				{
+					if ((i + 3) < lines_cnt)
+					{
+						string s = lines[i + 2];
+						string ss = Regex.Replace(s, @"\t|\n|\r", "");
+
+						sw.WriteLine("M03");
+						sw.WriteLine(ss + "			F " + vfire.ToString("0.0000", CultureInfo.InvariantCulture));
+					}
+				}
+			}
 			
+			sw.WriteLine("G01 X0 Y0 F " + vmax.ToString("0.0000", CultureInfo.InvariantCulture));
 
-
+			sr.Close();
+			sw.Close();
 		}
 	}
 }
